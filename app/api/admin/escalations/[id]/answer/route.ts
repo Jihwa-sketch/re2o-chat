@@ -29,7 +29,7 @@ export async function POST(
     );
   }
 
-  const escalation = getEscalationById(escalationId);
+  const escalation = await getEscalationById(escalationId);
   if (!escalation) {
     return NextResponse.json({ error: "존재하지 않는 이관 건입니다." }, { status: 404 });
   }
@@ -37,9 +37,9 @@ export async function POST(
     return NextResponse.json({ error: "이미 답변이 완료된 건입니다." }, { status: 409 });
   }
 
-  answerEscalation(escalationId, pmAnswer.trim(), pmName.trim());
+  await answerEscalation(escalationId, pmAnswer.trim(), pmName.trim());
 
-  const pmMessage = insertMessage({
+  const pmMessage = await insertMessage({
     conversationId: escalation.conversationId,
     role: "pm",
     content: pmAnswer.trim(),
@@ -47,25 +47,31 @@ export async function POST(
     status: "answered_pm",
   });
 
-  const repMessage = getMessageById(escalation.repMessageId);
+  const repMessage = await getMessageById(escalation.repMessageId);
 
-  appendResolvedRow({
-    inquiryId: `pm-${escalation.id}`,
-    conversationId: escalation.conversationId,
-    conversationSeq: getConversationQuestionSeq(escalation.conversationId, escalation.repMessageId),
-    repName: escalation.repName,
-    question: escalation.question,
-    category: escalation.category,
-    resolutionType: "pm",
-    confidence: escalation.confidence,
-    answer: pmAnswer.trim(),
-    pmName: pmName.trim(),
-    askedAt: repMessage ? repMessage.createdAt : escalation.createdAt,
-    resolvedAt: pmMessage.createdAt,
-    resolutionTimeSec: repMessage
-      ? secondsBetween(repMessage.createdAt, pmMessage.createdAt)
-      : null,
-  }).catch((err) => console.error("[sheets] append 실패:", err));
+  (async () => {
+    const conversationSeq = await getConversationQuestionSeq(
+      escalation.conversationId,
+      escalation.repMessageId
+    );
+    await appendResolvedRow({
+      inquiryId: `pm-${escalation.id}`,
+      conversationId: escalation.conversationId,
+      conversationSeq,
+      repName: escalation.repName,
+      question: escalation.question,
+      category: escalation.category,
+      resolutionType: "pm",
+      confidence: escalation.confidence,
+      answer: pmAnswer.trim(),
+      pmName: pmName.trim(),
+      askedAt: repMessage ? repMessage.createdAt : escalation.createdAt,
+      resolvedAt: pmMessage.createdAt,
+      resolutionTimeSec: repMessage
+        ? secondsBetween(repMessage.createdAt, pmMessage.createdAt)
+        : null,
+    });
+  })().catch((err) => console.error("[sheets] append 실패:", err));
 
   return NextResponse.json({ ok: true, pmMessage });
 }

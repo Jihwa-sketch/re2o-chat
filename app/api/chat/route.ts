@@ -32,48 +32,52 @@ export async function POST(request: NextRequest) {
     if (!repName || !repName.trim()) {
       return NextResponse.json({ error: "이름을 입력해주세요." }, { status: 400 });
     }
-    conversationId = createConversation(repName.trim());
-  } else if (!getConversationRepName(conversationId)) {
+    conversationId = await createConversation(repName.trim());
+  } else if (!(await getConversationRepName(conversationId))) {
     return NextResponse.json({ error: "존재하지 않는 대화입니다." }, { status: 404 });
   }
 
-  const finalRepName = getConversationRepName(conversationId)!;
+  const finalRepName = (await getConversationRepName(conversationId))!;
 
-  const repMessage = insertMessage({
+  const repMessage = await insertMessage({
     conversationId,
     role: "rep",
     content: message.trim(),
   });
 
-  const chunks = searchChunks(message);
+  const chunks = await searchChunks(message);
   const result = await classifyAndAnswer(message, chunks);
 
   if (result.canAnswer && result.answer) {
-    const aiMessage = insertMessage({
+    const answerText = result.answer;
+    const aiMessage = await insertMessage({
       conversationId,
       role: "ai",
-      content: result.answer,
+      content: answerText,
       category: result.category,
       status: "answered_ai",
       confidence: result.confidence,
       sourceChunkIds: result.citedChunkIds,
     });
 
-    appendResolvedRow({
-      inquiryId: `ai-${aiMessage.id}`,
-      conversationId,
-      conversationSeq: getConversationQuestionSeq(conversationId, repMessage.id),
-      repName: finalRepName,
-      question: message.trim(),
-      category: result.category,
-      resolutionType: "ai",
-      confidence: result.confidence,
-      answer: result.answer,
-      pmName: null,
-      askedAt: repMessage.createdAt,
-      resolvedAt: aiMessage.createdAt,
-      resolutionTimeSec: secondsBetween(repMessage.createdAt, aiMessage.createdAt),
-    }).catch((err) => console.error("[sheets] append 실패:", err));
+    (async () => {
+      const conversationSeq = await getConversationQuestionSeq(conversationId, repMessage.id);
+      await appendResolvedRow({
+        inquiryId: `ai-${aiMessage.id}`,
+        conversationId,
+        conversationSeq,
+        repName: finalRepName,
+        question: message.trim(),
+        category: result.category,
+        resolutionType: "ai",
+        confidence: result.confidence,
+        answer: answerText,
+        pmName: null,
+        askedAt: repMessage.createdAt,
+        resolvedAt: aiMessage.createdAt,
+        resolutionTimeSec: secondsBetween(repMessage.createdAt, aiMessage.createdAt),
+      });
+    })().catch((err) => console.error("[sheets] append 실패:", err));
 
     return NextResponse.json({
       conversationId,
@@ -82,7 +86,7 @@ export async function POST(request: NextRequest) {
     });
   }
 
-  const placeholderMessage = insertMessage({
+  const placeholderMessage = await insertMessage({
     conversationId,
     role: "ai",
     content: ESCALATION_PLACEHOLDER,
@@ -91,7 +95,7 @@ export async function POST(request: NextRequest) {
     confidence: result.confidence,
   });
 
-  createEscalation({
+  await createEscalation({
     conversationId,
     repMessageId: repMessage.id,
     repName: finalRepName,

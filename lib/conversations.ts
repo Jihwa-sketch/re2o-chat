@@ -13,19 +13,22 @@ export function secondsBetween(startSqliteDate: string, endSqliteDate: string): 
   );
 }
 
-export function createConversation(repName: string): number {
-  const db = getDb();
-  const result = db
-    .prepare("INSERT INTO conversations (rep_name) VALUES (?)")
-    .run(repName);
-  return result.lastInsertRowid as number;
+export async function createConversation(repName: string): Promise<number> {
+  const db = await getDb();
+  const result = await db.execute({
+    sql: "INSERT INTO conversations (rep_name) VALUES (?)",
+    args: [repName],
+  });
+  return Number(result.lastInsertRowid);
 }
 
-export function getConversationRepName(conversationId: number): string | null {
-  const db = getDb();
-  const row = db
-    .prepare("SELECT rep_name as repName FROM conversations WHERE id = ?")
-    .get(conversationId) as { repName: string } | undefined;
+export async function getConversationRepName(conversationId: number): Promise<string | null> {
+  const db = await getDb();
+  const result = await db.execute({
+    sql: "SELECT rep_name as repName FROM conversations WHERE id = ?",
+    args: [conversationId],
+  });
+  const row = result.rows[0] as unknown as { repName: string } | undefined;
   return row?.repName ?? null;
 }
 
@@ -39,59 +42,58 @@ interface InsertMessageParams {
   sourceChunkIds?: number[];
 }
 
-export function insertMessage(params: InsertMessageParams): ChatMessage {
-  const db = getDb();
-  const result = db
-    .prepare(
-      `INSERT INTO messages (conversation_id, role, content, category, status, confidence, source_chunk_ids_json)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`
-    )
-    .run(
+export async function insertMessage(params: InsertMessageParams): Promise<ChatMessage> {
+  const db = await getDb();
+  const result = await db.execute({
+    sql: `INSERT INTO messages (conversation_id, role, content, category, status, confidence, source_chunk_ids_json)
+          VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    args: [
       params.conversationId,
       params.role,
       params.content,
       params.category ?? null,
       params.status ?? null,
       params.confidence ?? null,
-      params.sourceChunkIds ? JSON.stringify(params.sourceChunkIds) : null
-    );
-  return getMessageById(result.lastInsertRowid as number)!;
+      params.sourceChunkIds ? JSON.stringify(params.sourceChunkIds) : null,
+    ],
+  });
+  return (await getMessageById(Number(result.lastInsertRowid)))!;
 }
 
-export function getMessageById(id: number): ChatMessage | null {
-  const db = getDb();
-  const row = db
-    .prepare(
-      `SELECT id, conversation_id as conversationId, role, content, category, status, confidence, created_at as createdAt
-       FROM messages WHERE id = ?`
-    )
-    .get(id) as ChatMessage | undefined;
+export async function getMessageById(id: number): Promise<ChatMessage | null> {
+  const db = await getDb();
+  const result = await db.execute({
+    sql: `SELECT id, conversation_id as conversationId, role, content, category, status, confidence, created_at as createdAt
+          FROM messages WHERE id = ?`,
+    args: [id],
+  });
+  const row = result.rows[0] as unknown as ChatMessage | undefined;
   return row ?? null;
 }
 
 /** 이 대화 안에서 이 rep 메시지가 몇 번째 질문인지(1부터 시작) */
-export function getConversationQuestionSeq(
+export async function getConversationQuestionSeq(
   conversationId: number,
   repMessageId: number
-): number {
-  const db = getDb();
-  const row = db
-    .prepare(
-      `SELECT COUNT(*) as seq FROM messages
-       WHERE conversation_id = ? AND role = 'rep' AND id <= ?`
-    )
-    .get(conversationId, repMessageId) as { seq: number };
+): Promise<number> {
+  const db = await getDb();
+  const result = await db.execute({
+    sql: `SELECT COUNT(*) as seq FROM messages
+          WHERE conversation_id = ? AND role = 'rep' AND id <= ?`,
+    args: [conversationId, repMessageId],
+  });
+  const row = result.rows[0] as unknown as { seq: number };
   return row.seq;
 }
 
-export function getConversationMessages(conversationId: number): ChatMessage[] {
-  const db = getDb();
-  return db
-    .prepare(
-      `SELECT id, conversation_id as conversationId, role, content, category, status, confidence, created_at as createdAt
-       FROM messages WHERE conversation_id = ? ORDER BY id ASC`
-    )
-    .all(conversationId) as ChatMessage[];
+export async function getConversationMessages(conversationId: number): Promise<ChatMessage[]> {
+  const db = await getDb();
+  const result = await db.execute({
+    sql: `SELECT id, conversation_id as conversationId, role, content, category, status, confidence, created_at as createdAt
+          FROM messages WHERE conversation_id = ? ORDER BY id ASC`,
+    args: [conversationId],
+  });
+  return result.rows as unknown as ChatMessage[];
 }
 
 interface CreateEscalationParams {
@@ -103,22 +105,21 @@ interface CreateEscalationParams {
   confidence: number | null;
 }
 
-export function createEscalation(params: CreateEscalationParams): number {
-  const db = getDb();
-  const result = db
-    .prepare(
-      `INSERT INTO escalations (conversation_id, rep_message_id, rep_name, category, question, confidence)
-       VALUES (?, ?, ?, ?, ?, ?)`
-    )
-    .run(
+export async function createEscalation(params: CreateEscalationParams): Promise<number> {
+  const db = await getDb();
+  const result = await db.execute({
+    sql: `INSERT INTO escalations (conversation_id, rep_message_id, rep_name, category, question, confidence)
+          VALUES (?, ?, ?, ?, ?, ?)`,
+    args: [
       params.conversationId,
       params.repMessageId,
       params.repName,
       params.category,
       params.question,
-      params.confidence
-    );
-  return result.lastInsertRowid as number;
+      params.confidence,
+    ],
+  });
+  return Number(result.lastInsertRowid);
 }
 
 export interface EscalationRow {
@@ -136,36 +137,38 @@ export interface EscalationRow {
   answeredAt: string | null;
 }
 
-export function listEscalations(status?: "pending" | "answered"): EscalationRow[] {
-  const db = getDb();
-  const query = `SELECT id, conversation_id as conversationId, rep_message_id as repMessageId, rep_name as repName,
+export async function listEscalations(
+  status?: "pending" | "answered"
+): Promise<EscalationRow[]> {
+  const db = await getDb();
+  const sql = `SELECT id, conversation_id as conversationId, rep_message_id as repMessageId, rep_name as repName,
       category, question, confidence, status, pm_answer as pmAnswer, pm_name as pmName,
       created_at as createdAt, answered_at as answeredAt
     FROM escalations
     ${status ? "WHERE status = ?" : ""}
     ORDER BY created_at ASC`;
-  return status
-    ? (db.prepare(query).all(status) as EscalationRow[])
-    : (db.prepare(query).all() as EscalationRow[]);
+  const result = await db.execute({ sql, args: status ? [status] : [] });
+  return result.rows as unknown as EscalationRow[];
 }
 
-export function getEscalationById(id: number): EscalationRow | null {
-  const db = getDb();
-  const row = db
-    .prepare(
-      `SELECT id, conversation_id as conversationId, rep_message_id as repMessageId, rep_name as repName,
+export async function getEscalationById(id: number): Promise<EscalationRow | null> {
+  const db = await getDb();
+  const result = await db.execute({
+    sql: `SELECT id, conversation_id as conversationId, rep_message_id as repMessageId, rep_name as repName,
         category, question, confidence, status, pm_answer as pmAnswer, pm_name as pmName,
         created_at as createdAt, answered_at as answeredAt
-       FROM escalations WHERE id = ?`
-    )
-    .get(id) as EscalationRow | undefined;
+       FROM escalations WHERE id = ?`,
+    args: [id],
+  });
+  const row = result.rows[0] as unknown as EscalationRow | undefined;
   return row ?? null;
 }
 
-export function answerEscalation(id: number, pmAnswer: string, pmName: string) {
-  const db = getDb();
-  db.prepare(
-    `UPDATE escalations SET status = 'answered', pm_answer = ?, pm_name = ?, answered_at = datetime('now')
-     WHERE id = ?`
-  ).run(pmAnswer, pmName, id);
+export async function answerEscalation(id: number, pmAnswer: string, pmName: string) {
+  const db = await getDb();
+  await db.execute({
+    sql: `UPDATE escalations SET status = 'answered', pm_answer = ?, pm_name = ?, answered_at = datetime('now')
+          WHERE id = ?`,
+    args: [pmAnswer, pmName, id],
+  });
 }

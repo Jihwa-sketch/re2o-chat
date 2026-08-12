@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { ingestDocument, listDocuments } from "@/lib/documents";
 
 export async function GET() {
-  const documents = listDocuments();
+  const documents = await listDocuments();
   return NextResponse.json({ documents });
 }
 

@@ -75,19 +75,18 @@ export function findFuzzyMatch(token: string, contentTokens: string[]): boolean 
   return contentTokens.some((ct) => tokensMatch(token, ct));
 }
 
-export function searchChunks(question: string, limit = 5): SearchResult[] {
+export async function searchChunks(question: string, limit = 5): Promise<SearchResult[]> {
   const normalizedQuestion = normalizeAliases(question);
   const tokens = Array.from(new Set(tokenize(normalizedQuestion)));
   if (tokens.length === 0) return [];
 
-  const db = getDb();
-  const rows = db
-    .prepare(
-      `SELECT c.id as id, c.document_id as documentId, c.content as content, d.filename as filename
-       FROM chunks c
-       JOIN documents d ON d.id = c.document_id`
-    )
-    .all() as Omit<SearchResult, "score">[];
+  const db = await getDb();
+  const result = await db.execute(
+    `SELECT c.id as id, c.document_id as documentId, c.content as content, d.filename as filename
+     FROM chunks c
+     JOIN documents d ON d.id = c.document_id`
+  );
+  const rows = result.rows as unknown as Omit<SearchResult, "score">[];
 
   const scored: SearchResult[] = [];
   for (const row of rows) {

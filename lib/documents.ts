@@ -68,39 +68,48 @@ export async function ingestDocument(filename: string, buffer: Buffer) {
   }
 
   const db = getDb();
-  const insertDoc = db.prepare(
-    "INSERT INTO documents (filename) VALUES (?)"
-  );
-  const insertChunk = db.prepare(
-    "INSERT INTO chunks (document_id, content, chunk_index) VALUES (?, ?, ?)"
-  );
+  const tx = await (await db).transaction("write");
+  try {
+    const docResult = await tx.execute({
+      sql: "INSERT INTO documents (filename) VALUES (?)",
+      args: [filename],
+    });
+    const documentId = Number(docResult.lastInsertRowid);
 
-  const result = db.transaction(() => {
-    const docId = insertDoc.run(filename).lastInsertRowid as number;
-    chunks.forEach((chunk, i) => insertChunk.run(docId, chunk, i));
-    return docId;
-  })();
+    for (let i = 0; i < chunks.length; i++) {
+      await tx.execute({
+        sql: "INSERT INTO chunks (document_id, content, chunk_index) VALUES (?, ?, ?)",
+        args: [documentId, chunks[i], i],
+      });
+    }
 
-  return { documentId: result, chunkCount: chunks.length };
+    await tx.commit();
+    return { documentId, chunkCount: chunks.length };
+  } catch (err) {
+    await tx.rollback();
+    throw err;
+  }
 }
 
-export function listDocuments() {
-  const db = getDb();
-  return db
-    .prepare(
-      `SELECT d.id, d.filename, d.uploaded_at as uploadedAt, COUNT(c.id) as chunkCount
-       FROM documents d
-       LEFT JOIN chunks c ON c.document_id = d.id
-       GROUP BY d.id
-       ORDER BY d.uploaded_at DESC`
-    )
-    .all();
+export async function listDocuments() {
+  const db = await getDb();
+  const result = await db.execute(
+    `SELECT d.id, d.filename, d.uploaded_at as uploadedAt, COUNT(c.id) as chunkCount
+     FROM documents d
+     LEFT JOIN chunks c ON c.document_id = d.id
+     GROUP BY d.id
+     ORDER BY d.uploaded_at DESC`
+  );
+  return result.rows;
 }
 
-export function deleteDocument(id: number) {
-  const db = getDb();
-  db.transaction(() => {
-    db.prepare("DELETE FROM chunks WHERE document_id = ?").run(id);
-    db.prepare("DELETE FROM documents WHERE id = ?").run(id);
-  })();
+export async function deleteDocument(id: number) {
+  const db = await getDb();
+  await db.batch(
+    [
+      { sql: "DELETE FROM chunks WHERE document_id = ?", args: [id] },
+      { sql: "DELETE FROM documents WHERE id = ?", args: [id] },
+    ],
+    "write"
+  );
 }

@@ -10,6 +10,6 @@ export async function DELETE(
   if (!Number.isInteger(documentId)) {
     return NextResponse.json({ error: "잘못된 문서 ID입니다." }, { status: 400 });
   }
-  deleteDocument(documentId);
+  await deleteDocument(documentId);
   return NextResponse.json({ ok: true });
 }

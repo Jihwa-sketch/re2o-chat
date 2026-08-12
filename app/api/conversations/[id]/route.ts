@@ -11,11 +11,11 @@ export async function GET(
     return NextResponse.json({ error: "잘못된 대화 ID입니다." }, { status: 400 });
   }
 
-  const repName = getConversationRepName(conversationId);
+  const repName = await getConversationRepName(conversationId);
   if (!repName) {
     return NextResponse.json({ error: "존재하지 않는 대화입니다." }, { status: 404 });
   }
 
-  const messages = getConversationMessages(conversationId);
+  const messages = await getConversationMessages(conversationId);
   return NextResponse.json({ repName, messages });
 }
