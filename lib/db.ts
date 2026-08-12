@@ -58,6 +58,20 @@ async function migrate(client: Client) {
     ],
     "write"
   );
+
+  // 부작용 사례 추가정보 컬럼 (기존 테이블에 없을 수 있어 개별적으로, 실패는 무시)
+  for (const column of [
+    "hospital",
+    "procedure_date",
+    "procedure_protocol",
+    "photo_data_url",
+  ]) {
+    try {
+      await client.execute(`ALTER TABLE escalations ADD COLUMN ${column} TEXT`);
+    } catch {
+      // 이미 컬럼이 존재하면 무시
+    }
+  }
 }
 
 async function init(): Promise<Client> {

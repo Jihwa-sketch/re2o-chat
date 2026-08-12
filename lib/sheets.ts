@@ -12,6 +12,9 @@ interface ResolvedRow {
   askedAt: string;
   resolvedAt: string;
   resolutionTimeSec: number | null;
+  hospital?: string | null;
+  procedureDate?: string | null;
+  procedureProtocol?: string | null;
 }
 
 /**

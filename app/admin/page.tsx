@@ -20,6 +20,10 @@ interface Escalation {
   pmName: string | null;
   createdAt: string;
   answeredAt: string | null;
+  hospital: string | null;
+  procedureDate: string | null;
+  procedureProtocol: string | null;
+  photoDataUrl: string | null;
 }
 
 const REFRESH_INTERVAL_MS = 15000;
@@ -32,6 +36,39 @@ function timeAgo(iso: string): string {
   const hours = Math.floor(minutes / 60);
   if (hours < 24) return `${hours}시간 전`;
   return `${Math.floor(hours / 24)}일 전`;
+}
+
+function AdverseEventFields({ e }: { e: Escalation }) {
+  if (!e.hospital && !e.procedureDate && !e.procedureProtocol && !e.photoDataUrl) return null;
+  return (
+    <div className="flex flex-col gap-3 rounded-control bg-white/60 p-3 text-sm">
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+        <div>
+          <p className="text-xs text-text-tertiary">병원</p>
+          <p className="text-text">{e.hospital || "-"}</p>
+        </div>
+        <div>
+          <p className="text-xs text-text-tertiary">시술일</p>
+          <p className="text-text">{e.procedureDate || "-"}</p>
+        </div>
+        <div>
+          <p className="text-xs text-text-tertiary">시술 프로토콜</p>
+          <p className="text-text">{e.procedureProtocol || "-"}</p>
+        </div>
+      </div>
+      {e.photoDataUrl && (
+        <div>
+          <p className="mb-1 text-xs text-text-tertiary">첨부 사진</p>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={e.photoDataUrl}
+            alt="부작용 사례 첨부 사진"
+            className="max-h-64 rounded-control border border-border object-contain"
+          />
+        </div>
+      )}
+    </div>
+  );
 }
 
 export default function AdminDashboard() {
@@ -93,7 +130,47 @@ export default function AdminDashboard() {
   };
 
   const pending = escalations.filter((e) => e.status === "pending");
+  const pendingAdverse = pending.filter((e) => e.category === "부작용");
+  const pendingOther = pending.filter((e) => e.category !== "부작용");
   const answered = escalations.filter((e) => e.status === "answered").reverse();
+
+  const renderCard = (e: Escalation, emphasize: boolean) => (
+    <Card
+      key={e.id}
+      className={
+        emphasize
+          ? "flex flex-col gap-3 border-2 border-danger bg-danger-soft"
+          : "flex flex-col gap-3"
+      }
+    >
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          {emphasize && <span className="text-sm font-bold text-danger">⚠️ 부작용</span>}
+          <CategoryBadge category={e.category} />
+          <StatusPill status="pending" />
+        </div>
+        <span className="text-xs text-text-tertiary">{timeAgo(e.createdAt)}</span>
+      </div>
+      <div>
+        <p className="text-xs text-text-secondary">{e.repName}님의 질문</p>
+        <p className="mt-1 text-[15px] text-text">{e.question}</p>
+      </div>
+      <AdverseEventFields e={e} />
+      <Textarea
+        placeholder="답변을 입력하세요"
+        rows={3}
+        value={drafts[e.id] ?? ""}
+        onChange={(ev) => setDrafts((prev) => ({ ...prev, [e.id]: ev.target.value }))}
+      />
+      <Button
+        className="self-end"
+        onClick={() => submitAnswer(e.id)}
+        disabled={submittingId === e.id}
+      >
+        {submittingId === e.id ? "전송 중..." : "답변 전송"}
+      </Button>
+    </Card>
+  );
 
   return (
     <div className="flex flex-col gap-6">
@@ -113,42 +190,28 @@ export default function AdminDashboard() {
         </div>
       </div>
 
-      <div className="flex flex-col gap-4">
-        {pending.length === 0 && (
-          <p className="py-8 text-center text-sm text-text-tertiary">
+      <div className="flex flex-col gap-3">
+        <h2 className="text-sm font-bold text-danger">
+          ⚠️ 부작용 이관 ({pendingAdverse.length})
+        </h2>
+        {pendingAdverse.length === 0 && (
+          <p className="py-4 text-center text-sm text-text-tertiary">
+            대기중인 부작용 사례가 없어요.
+          </p>
+        )}
+        {pendingAdverse.map((e) => renderCard(e, true))}
+      </div>
+
+      <div className="flex flex-col gap-3">
+        <h2 className="text-sm font-bold text-text-secondary">
+          미해결 문의 ({pendingOther.length})
+        </h2>
+        {pendingOther.length === 0 && (
+          <p className="py-4 text-center text-sm text-text-tertiary">
             대기중인 이관 문의가 없어요.
           </p>
         )}
-        {pending.map((e) => (
-          <Card key={e.id} className="flex flex-col gap-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <CategoryBadge category={e.category} />
-                <StatusPill status="pending" />
-              </div>
-              <span className="text-xs text-text-tertiary">{timeAgo(e.createdAt)}</span>
-            </div>
-            <div>
-              <p className="text-xs text-text-secondary">{e.repName}님의 질문</p>
-              <p className="mt-1 text-[15px] text-text">{e.question}</p>
-            </div>
-            <Textarea
-              placeholder="답변을 입력하세요"
-              rows={3}
-              value={drafts[e.id] ?? ""}
-              onChange={(ev) =>
-                setDrafts((prev) => ({ ...prev, [e.id]: ev.target.value }))
-              }
-            />
-            <Button
-              className="self-end"
-              onClick={() => submitAnswer(e.id)}
-              disabled={submittingId === e.id}
-            >
-              {submittingId === e.id ? "전송 중..." : "답변 전송"}
-            </Button>
-          </Card>
-        ))}
+        {pendingOther.map((e) => renderCard(e, false))}
       </div>
 
       <div className="flex flex-col gap-3">
@@ -172,6 +235,7 @@ export default function AdminDashboard() {
               </div>
               <p className="text-xs text-text-secondary">{e.repName}님의 질문</p>
               <p className="text-[15px] text-text">{e.question}</p>
+              <AdverseEventFields e={e} />
               <p className="rounded-control bg-surface-muted p-3 text-[15px] text-text">
                 {e.pmAnswer}
               </p>

@@ -11,9 +11,7 @@ import {
 } from "@/lib/conversations";
 import { notifyPmOfEscalation } from "@/lib/mailer";
 import { appendResolvedRow } from "@/lib/sheets";
-
-const ESCALATION_PLACEHOLDER =
-  "확인 후 담당 PM에게 전달했어요. 정리되는 대로 답변드릴게요.";
+import { ESCALATION_PLACEHOLDER } from "@/lib/constants";
 
 export async function POST(request: NextRequest) {
   const body = await request.json();
@@ -83,6 +81,16 @@ export async function POST(request: NextRequest) {
       conversationId,
       status: "answered",
       message: aiMessage,
+    });
+  }
+
+  // 부작용 사례는 병원/시술일/시술 프로토콜을 추가로 받은 뒤에 이관을 확정한다.
+  if (result.category === "부작용") {
+    return NextResponse.json({
+      conversationId,
+      status: "needs_adverse_event_details",
+      repMessageId: repMessage.id,
+      category: result.category,
     });
   }
 

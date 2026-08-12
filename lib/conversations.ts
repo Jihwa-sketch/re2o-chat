@@ -103,13 +103,17 @@ interface CreateEscalationParams {
   category: Category;
   question: string;
   confidence: number | null;
+  hospital?: string | null;
+  procedureDate?: string | null;
+  procedureProtocol?: string | null;
+  photoDataUrl?: string | null;
 }
 
 export async function createEscalation(params: CreateEscalationParams): Promise<number> {
   const db = await getDb();
   const result = await db.execute({
-    sql: `INSERT INTO escalations (conversation_id, rep_message_id, rep_name, category, question, confidence)
-          VALUES (?, ?, ?, ?, ?, ?)`,
+    sql: `INSERT INTO escalations (conversation_id, rep_message_id, rep_name, category, question, confidence, hospital, procedure_date, procedure_protocol, photo_data_url)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     args: [
       params.conversationId,
       params.repMessageId,
@@ -117,6 +121,10 @@ export async function createEscalation(params: CreateEscalationParams): Promise<
       params.category,
       params.question,
       params.confidence,
+      params.hospital ?? null,
+      params.procedureDate ?? null,
+      params.procedureProtocol ?? null,
+      params.photoDataUrl ?? null,
     ],
   });
   return Number(result.lastInsertRowid);
@@ -135,15 +143,23 @@ export interface EscalationRow {
   pmName: string | null;
   createdAt: string;
   answeredAt: string | null;
+  hospital: string | null;
+  procedureDate: string | null;
+  procedureProtocol: string | null;
+  photoDataUrl: string | null;
 }
+
+const ESCALATION_COLUMNS = `id, conversation_id as conversationId, rep_message_id as repMessageId, rep_name as repName,
+      category, question, confidence, status, pm_answer as pmAnswer, pm_name as pmName,
+      created_at as createdAt, answered_at as answeredAt,
+      hospital, procedure_date as procedureDate, procedure_protocol as procedureProtocol,
+      photo_data_url as photoDataUrl`;
 
 export async function listEscalations(
   status?: "pending" | "answered"
 ): Promise<EscalationRow[]> {
   const db = await getDb();
-  const sql = `SELECT id, conversation_id as conversationId, rep_message_id as repMessageId, rep_name as repName,
-      category, question, confidence, status, pm_answer as pmAnswer, pm_name as pmName,
-      created_at as createdAt, answered_at as answeredAt
+  const sql = `SELECT ${ESCALATION_COLUMNS}
     FROM escalations
     ${status ? "WHERE status = ?" : ""}
     ORDER BY created_at ASC`;
@@ -154,11 +170,20 @@ export async function listEscalations(
 export async function getEscalationById(id: number): Promise<EscalationRow | null> {
   const db = await getDb();
   const result = await db.execute({
-    sql: `SELECT id, conversation_id as conversationId, rep_message_id as repMessageId, rep_name as repName,
-        category, question, confidence, status, pm_answer as pmAnswer, pm_name as pmName,
-        created_at as createdAt, answered_at as answeredAt
-       FROM escalations WHERE id = ?`,
+    sql: `SELECT ${ESCALATION_COLUMNS} FROM escalations WHERE id = ?`,
     args: [id],
+  });
+  const row = result.rows[0] as unknown as EscalationRow | undefined;
+  return row ?? null;
+}
+
+export async function getEscalationByRepMessageId(
+  repMessageId: number
+): Promise<EscalationRow | null> {
+  const db = await getDb();
+  const result = await db.execute({
+    sql: `SELECT ${ESCALATION_COLUMNS} FROM escalations WHERE rep_message_id = ?`,
+    args: [repMessageId],
   });
   const row = result.rows[0] as unknown as EscalationRow | undefined;
   return row ?? null;

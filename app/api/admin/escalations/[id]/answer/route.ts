@@ -70,6 +70,9 @@ export async function POST(
       resolutionTimeSec: repMessage
         ? secondsBetween(repMessage.createdAt, pmMessage.createdAt)
         : null,
+      hospital: escalation.hospital,
+      procedureDate: escalation.procedureDate,
+      procedureProtocol: escalation.procedureProtocol,
     });
   })().catch((err) => console.error("[sheets] append 실패:", err));
 

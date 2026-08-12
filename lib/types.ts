@@ -1,16 +1,22 @@
 export const CATEGORIES = [
-  "제품 관련",
-  "실제 임상",
-  "비급여 승인",
+  "제품 정보",
+  "시술 프로토콜",
+  "임상 데이터",
   "부작용",
   "기타",
 ] as const;
 
 export type Category = (typeof CATEGORIES)[number];
 
-export const SENSITIVE_CATEGORIES: Category[] = ["실제 임상", "부작용"];
+export const SENSITIVE_CATEGORIES: Category[] = ["임상 데이터", "부작용"];
 
 export type MessageStatus = "answered_ai" | "escalated" | "answered_pm";
+
+export interface AdverseEventDetails {
+  hospital: string;
+  procedureDate: string;
+  procedureProtocol: string;
+}
 
 export interface ChatMessage {
   id: number;

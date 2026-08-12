@@ -26,23 +26,37 @@ const roleConfig: Record<
   },
 };
 
+const EMPHASIZE_BUBBLE =
+  "bg-danger-soft text-[#8A1220] border-2 border-danger rounded-bl-md";
+
 export function ChatBubble({
   role,
   children,
   footer,
+  emphasize,
 }: {
   role: Role;
   children: ReactNode;
   footer?: ReactNode;
+  /** 부작용 사례처럼 강하게 주의를 끌어야 하는 메시지에 사용 */
+  emphasize?: boolean;
 }) {
   const { align, bubble, label } = roleConfig[role];
   return (
     <div className={`flex flex-col ${align} gap-1`}>
-      {label && (
-        <span className="px-1 text-xs font-medium text-text-tertiary">{label}</span>
+      {(label || emphasize) && (
+        <span
+          className={`px-1 text-xs font-semibold ${
+            emphasize ? "text-danger" : "text-text-tertiary font-medium"
+          }`}
+        >
+          {emphasize ? `⚠️ 부작용 사례${label ? ` · ${label}` : ""}` : label}
+        </span>
       )}
       <div
-        className={`max-w-[80%] whitespace-pre-wrap rounded-2xl px-4 py-3 text-[15px] leading-relaxed ${bubble}`}
+        className={`max-w-[80%] whitespace-pre-wrap rounded-2xl px-4 py-3 text-[15px] leading-relaxed ${
+          emphasize ? EMPHASIZE_BUBBLE : bubble
+        }`}
       >
         {children}
       </div>
