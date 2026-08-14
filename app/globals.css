@@ -56,3 +56,10 @@ body {
   color: var(--foreground);
   font-family: var(--font-sans);
 }
+
+/* Re2O Masters Summit 대시보드 전용 - 메인 컬러만 코랄로 오버라이드 */
+.dashboard-scope {
+  --color-brand: #ff5a38;
+  --color-brand-strong: #e14020;
+  --color-brand-soft: #ffeae3;
+}
